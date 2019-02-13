@@ -8,11 +8,11 @@ color=blue
 
 source $SCRIPTPATH/../lib
 
-zparseopts -db-name:=DB_NAME
-
 function create_subnet_in_vpc_in_az() {
   vpc=$1
   az=$2
+
+  # We need to find an available cidr
   cidr=$(aws ec2 describe-subnets |
     jq -r ".Subnets[] | select(.VpcId==\"$vpc\") | .CidrBlock" |
     python -c "import sys
@@ -32,8 +32,8 @@ for i in range(0, 32):
     jq -r '.Subnet.SubnetId'
 }
 
-DB_IDENTIFIER="$ENV-${DB_NAME[2]}"
-VAULT_PATH="database/$CLUSTER_NAME"
+DB_IDENTIFIER="$ENV-${DB_NAME}"
+VAULT_PATH=${VAULT_POSTGRES_PATH:="database/$CLUSTER_NAME"}
 INSTANCE_CLASS=${INSTANCE_CLASS:=db.m4.large}
 MASTER_USERNAME=${MASTER_USERNAME:=root}
 DEFAULT_PASSWORD=$(cat /dev/urandom | base64 | tr -dc '0-9a-zA-Z' | head -c30) # mac / zsh
@@ -55,7 +55,7 @@ function tag_rds_resource() {
 }
 
 if aws rds describe-db-instances |
-  jq -e ".DBInstances[] | select(.DBInstanceIdentifier==\"$DB_IDENTIFIER\")"; then
+  jq -e ".DBInstances[] | select(.DBInstanceIdentifier==\"$DB_IDENTIFIER\")" >/dev/null; then
   # Since we can't retrieve the master password, if the db already exists we
   # should exit.
   exit 0
@@ -120,7 +120,7 @@ fi
 print -nP "Spawning the database... "
 output=$(aws rds create-db-instance \
   $VPC \
-  $DB_NAME \
+  --db-name $DB_NAME \
   --vpc-security-group-ids $SECURITY_GROUP_ID \
   --db-subnet-group-name $SUBNET_GROUP_NAME \
   --db-instance-identifier $DB_IDENTIFIER \
@@ -136,12 +136,6 @@ INSTANCE_ARN=$(echo $output | jq -r '.DBInstance.DBInstanceArn')
 
 tag_rds_resource $INSTANCE_ARN
 
-print -nP "Enabling the database secret in vault... "
-if ! vault secrets list | grep -q "^$VAULT_PATH/"; then
-  silent vault secrets enable -path $VAULT_PATH database
-fi
-print -P "%F{green}done.%F{$color}"
-
 print -nP "Waiting for the database to get an endpoint address... "
 until aws rds describe-db-instances |
   jq -e ".DBInstances[] | select(.DBInstanceIdentifier==\"$DB_IDENTIFIER\") | .Endpoint.Address" >/dev/null
@@ -154,34 +148,50 @@ instance=$(aws rds describe-db-instances)
 HOST=$(echo $instance | jq -r ".DBInstances[] | select(.DBInstanceIdentifier==\"$DB_IDENTIFIER\") | .Endpoint.Address")
 PORT=$(echo $instance | jq -r ".DBInstances[] | select(.DBInstanceIdentifier==\"$DB_IDENTIFIER\") | .Endpoint.Port")
 
-readonly_role=$DB_IDENTIFIER-readonly
-fullaccess_role=$DB_IDENTIFIER-fullaccess
 
-print -nP "Creating vault roles for this database... "
-silent vault write $VAULT_PATH/roles/$readonly_role \
-    db_name=${DB_NAME[2]} \
-    creation_statements="CREATE ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}'; \
-        GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"{{name}}\";" \
-    default_ttl="1h" \
-    max_ttl="24h"
+# The following lines are disabled because of a problem vault <> aws rds
+# We use a simpler (yet still secure) way by just storing credentials into
+# plain secret
+# 
+# print -nP "Enabling the database secret in vault... "
+# if ! vault secrets list | grep -q "^$VAULT_PATH/"; then
+#   silent vault secrets enable -path $VAULT_PATH database
+# fi
+# print -P "%F{green}done.%F{$color}"
+# 
+# print -nP "Creating vault roles for this database... "
+# silent vault write $VAULT_PATH/roles/$VAULT_POSTGRES_READONLY_ROLE \
+#     db_name=${DB_NAME} \
+#     creation_statements="CREATE ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}'; \
+#         GRANT SELECT ON ALL TABLES IN SCHEMA public TO \"{{name}}\";" \
+#     default_ttl="1h" \
+#     max_ttl="24h"
+# 
+# silent vault write $VAULT_PATH/roles/$VAULT_POSTGRES_FULLACCESS_ROLE \
+#     db_name=${DB_NAME} \
+#     creation_statements="CREATE ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}'; \
+#         GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"{{name}}\"; \
+#         GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO \"{{name}}\";" \
+#     default_ttl="1h" \
+#     max_ttl="168h" # one week
+# print -P "%F{green}done.%F{$color}"
+# 
+# connection_url="postgresql://{{username}}:{{password}}@$HOST:$PORT/${DB_NAME}"
+# print -P "Configuring the vault database record with the following values:"
+# print -P "%F{yellow}connection_url%F{$color}=%F{magenta}$connection_url%F{$color}"
+# print -P "%F{yellow}username%F{$color}=%F{magenta}$MASTER_USERNAME%F{$color}"
+# print -P "%F{yellow}password%F{$color}=%F{magenta}$MASTER_USER_PASSWORD%F{$color}"
+# silent vault write $VAULT_PATH/config/${DB_NAME} \
+#     plugin_name=postgresql-database-plugin \
+#     allowed_roles="$VAULT_POSTGRES_READONLY_ROLE,$VAULT_POSTGRES_FULLACCESS_ROLE" \
+#     connection_url="$connection_url" \
+#     username="$MASTER_USERNAME" \
+#     password="$MASTER_USER_PASSWORD"
+# print -P "%F{green}done.%F{$color}"
 
-silent vault write $VAULT_PATH/roles/$fullaccess_role \
-    db_name=${DB_NAME[2]} \
-    creation_statements="CREATE ROLE \"{{name}}\" WITH LOGIN PASSWORD '{{password}}' VALID UNTIL '{{expiration}}'; \
-        GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO \"{{name}}\";" \
-    default_ttl="1h" \
-    max_ttl="168h" # one week
-print -P "%F{green}done.%F{$color}"
-
-connection_url="postgresql://{{username}}:{{password}}@$HOST:$PORT/${DB_NAME[2]}"
-print -P "Configuring the vault database record with the following values:"
-print -P "%F{yellow}connection_url%F{$color}=%F{magenta}$connection_url%F{$color}"
-print -P "%F{yellow}username%F{$color}=%F{magenta}$MASTER_USERNAME%F{$color}"
-print -P "%F{yellow}password%F{$color}=%F{magenta}$MASTER_USER_PASSWORD%F{$color}"
-silent vault write $VAULT_PATH/config/${DB_NAME[2]} \
-    plugin_name=postgresql-database-plugin \
-    allowed_roles="$readonly_role,$fullaccess_role" \
-    connection_url="$connection_url" \
-    username="$MASTER_USERNAME" \
-    password="$MASTER_USER_PASSWORD"
+print -nP "Storing postgres host and credentials into vault... "
+silent vault write $VAULT_CLUSTER_PATH/postgres \
+  host=$HOST \
+  username=$MASTER_USERNAME \
+  password=$MASTER_USER_PASSWORD
 print -P "%F{green}done.%F{$color}"
