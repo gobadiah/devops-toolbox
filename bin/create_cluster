@@ -7,6 +7,7 @@ DEV_NODE_COUNT=2
 ENV_NODE_COUNT=3
 MASTER_SIZE=${MASTER_SIZE:=t2.medium}
 NODE_SIZE=${NODE_SIZE:=t2.nano}
+KUBERNETES_VERSION=${KUBERNETES_VERSION:="1.13.7"}
 
 zparseopts -dev=DEV -cluster-name:=CLUSTER_NAME h=HELP -help=HELP -wait=WAIT \
   -vault=VAULT
@@ -14,8 +15,8 @@ zparseopts -dev=DEV -cluster-name:=CLUSTER_NAME h=HELP -help=HELP -wait=WAIT \
 function print_help() {
   print "Usage: "
   print -n "[NODE_COUNT=6] [NODE_SIZE=m5.large] [MASTER_SIZE=t2.nano] "
-  print -n "[ZONES=us-west-1b] create_cluster [--dev] "
-  print -n "--cluster-name example.k8s.local "
+  print -n "[ZONES=us-west-1b] [KUBERNETES_VERSION=1.11.7] create_cluster [--dev]"
+  print -n '--cluster-name example.k8s.local '
   print    "[--wait]"
   print
   print "Creates a k8s cluster."
@@ -29,6 +30,7 @@ function print_help() {
   print " > NODE_COUNT = $ENV_NODE_COUNT (dev $DEV_NODE_COUNT)"
   print " > MASTER_SIZE = $MASTER_SIZE"
   print " > NODE_SIZE = $NODE_SIZE"
+  print " > KUBERNETES_VERSION = $KUBERNETES_VERSION"
 }
 
 if [[ "$HELP" != "" ]]; then
