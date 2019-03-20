@@ -16,7 +16,7 @@ function print_help() {
   print "Usage: "
   print -n "[NODE_COUNT=6] [NODE_SIZE=m5.large] [MASTER_SIZE=t2.nano] "
   print -n "[ZONES=us-west-1b] [KUBERNETES_VERSION=1.11.7] create_cluster [--dev]"
-  print -n '--cluster-name example.k8s.local '
+  print -n '\-\-cluster-name example.k8s.local '
   print    "[--wait]"
   print
   print "Creates a k8s cluster."
@@ -53,15 +53,6 @@ fi
 
 color=blue
 
-print -P  "%F{$color}"
-print -nP "Creating a k8s cluster named %F{yellow}${CLUSTER_NAME[2]}%F{$color} "
-print -P  "using kops with the following options:"
-print -P  " > zones: %F{yellow}$ZONES%F{$color}"
-print -P  " > node count: %F{yellow}$NODE_COUNT%F{$color}"
-print -P  " > master size: %F{yellow}$MASTER_SIZE%F{$color}"
-print -P  " > node size: %F{yellow}$NODE_SIZE%F{$color}"
-print -P  "%f"
-
 cidr=$(aws ec2 describe-vpcs | jq -r '.Vpcs[].CidrBlock' | python -c "import sys
 cidrs = []
 for line in sys.stdin:
@@ -72,7 +63,19 @@ for i in range(0,256):
     print cidr
     break")
 
+print -P  "%F{$color}"
+print -nP "Creating a k8s cluster named %F{yellow}${CLUSTER_NAME[2]}%F{$color} "
+print -P  "using kops with the following options:"
+print -P  " > cidr: %F{yellow}$cidr%F{$color}"
+print -P  " > zones: %F{yellow}$ZONES%F{$color}"
+print -P  " > node count: %F{yellow}$NODE_COUNT%F{$color}"
+print -P  " > master size: %F{yellow}$MASTER_SIZE%F{$color}"
+print -P  " > node size: %F{yellow}$NODE_SIZE%F{$color}"
+print -P  " > kubernetes version: %F{yellow}$KUBERNETES_VERSION%F{$color}"
+print -P  "%f"
+
 kops create cluster \
+  --kubernetes-version $KUBERNETES_VERSION \
   --zones $ZONES \
   --cloud aws \
   --node-count $NODE_COUNT \
