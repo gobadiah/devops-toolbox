@@ -4,8 +4,6 @@ set -e
 
 zparseopts tls-skip-verify=TLS_SKIP_VERIFY
 
-CLUSTER_NAME=$(kubectl config current-context)
-
 AWS_ACCOUNT_ID=$(aws sts get-caller-identity --output text --query 'Account')
 
 VAULT_USER="vault-$CLUSTER_NAME"

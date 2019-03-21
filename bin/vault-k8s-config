@@ -4,7 +4,7 @@ set -e
 
 zparseopts tls-skip-verify=TLS_SKIP_VERIFY
 
-CLUSTER=$(kubectl config current-context)
+CLUSTER=$(kubectl --context $CLUSTER_NAME config current-context)
 SERVICE_ACCOUNT="vault-auth"
 
 rm -rf /tmp/ca || true
@@ -22,12 +22,12 @@ if ! vault auth list $TLS_SKIP_VERIFY | grep -q "^$VAULT_K8S_PATH/"; then
   vault auth enable $TLS_SKIP_VERIFY -path=$VAULT_K8S_PATH kubernetes
 fi
 
-if ! kubectl get sa | grep -q "^$SERVICE_ACCOUNT "; then
-  kubectl -n default create serviceaccount $SERVICE_ACCOUNT
+if ! kubectl --context $CLUSTER_NAME get sa | grep -q "^$SERVICE_ACCOUNT "; then
+  kubectl --context $CLUSTER_NAME -n default create serviceaccount $SERVICE_ACCOUNT
 fi
 
 # Binding a service account with the ClusterRole system:auth-delegator
-cat << EOF | kubectl apply -f -
+cat << EOF | kubectl --context $CLUSTER_NAME apply -f -
 apiVersion: rbac.authorization.k8s.io/v1beta1
 kind: ClusterRoleBinding
 metadata:
@@ -44,10 +44,10 @@ subjects:
 EOF
 
 # Generating token for service account $SERVICE_ACCOUNT
-SECRET_NAME=$(kubectl -n default get serviceaccount $SERVICE_ACCOUNT -o jsonpath='{.secrets[0].name}')
-TR_ACCOUNT_TOKEN=$(kubectl -n default get secret ${SECRET_NAME} -o jsonpath='{.data.token}' | base64 --decode)
+SECRET_NAME=$(kubectl --context $CLUSTER_NAME -n default get serviceaccount $SERVICE_ACCOUNT -o jsonpath='{.secrets[0].name}')
+TR_ACCOUNT_TOKEN=$(kubectl --context $CLUSTER_NAME -n default get secret ${SECRET_NAME} -o jsonpath='{.data.token}' | base64 --decode)
 
-KUBERNETES_HOST=$(kubectl config view -o json | jq -r ".clusters[] | select(.name==\"$(kubectl config current-context)\" ) | .cluster.server")
+KUBERNETES_HOST=$(kubectl --context $CLUSTER_NAME config view -o json | jq -r ".clusters[] | select(.name==\"$(kubectl --context $CLUSTER_NAME config current-context)\" ) | .cluster.server")
 
 vault write $TLS_SKIP_VERIFY auth/$VAULT_K8S_PATH/config \
   kubernetes_host=$KUBERNETES_HOST \
