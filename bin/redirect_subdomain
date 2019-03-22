@@ -22,7 +22,7 @@ function redirect_subdomain() {
     "ResourceRecordSet": {
         "Name": "$subdomain",
         "Type": "CNAME",
-        "TTL": 3600,
+        "TTL": 300,
         "ResourceRecords": [
             {
                 "Value": "$target"
