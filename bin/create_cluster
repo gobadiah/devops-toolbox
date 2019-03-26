@@ -10,18 +10,19 @@ NODE_SIZE=${NODE_SIZE:=t2.nano}
 KUBERNETES_VERSION=${KUBERNETES_VERSION:="1.13.7"}
 
 zparseopts -dev=DEV -cluster-name:=CLUSTER_NAME h=HELP -help=HELP -wait=WAIT \
-  -vault=VAULT
+  -vault=VAULT -terraform=TERRAFORM
 
 function print_help() {
   print "Usage: "
   print -n "[NODE_COUNT=6] [NODE_SIZE=m5.large] [MASTER_SIZE=t2.nano] "
   print -n "[ZONES=us-west-1b] [KUBERNETES_VERSION=1.11.7] create_cluster [--dev]"
   print -n '\-\-cluster-name example.k8s.local '
-  print    "[--wait]"
+  print    "[--terraform] [--wait]"
   print
   print "Creates a k8s cluster."
   print '  --dev flag builds a smaller cluster.'
   print '  --wait flag waits for cluster to be read.'
+  print '  --terraform generate terraform output instead of actually creating the cluster.'
   print -n '  --vault configure a vault auth backend for this cluster '
   print '(wait for the cluster completion even without --wait flag)'
   print
@@ -74,6 +75,11 @@ print -P  " > node size: %F{yellow}$NODE_SIZE%F{$color}"
 print -P  " > kubernetes version: %F{yellow}$KUBERNETES_VERSION%F{$color}"
 print -P  "%f"
 
+target="direct"
+if [[ "$TERRAFORM" != "" ]]; then
+  target="terraform"
+fi
+
 kops create cluster \
   --kubernetes-version $KUBERNETES_VERSION \
   --zones $ZONES \
@@ -83,6 +89,8 @@ kops create cluster \
   --node-size $NODE_SIZE \
   --name ${CLUSTER_NAME[2]} \
   --network-cidr $cidr \
+  --target $target \
+  --out . \
   --yes
 
 if [[ "$WAIT" != "--wait" && "$VAULT" != "--vault" ]]; then
