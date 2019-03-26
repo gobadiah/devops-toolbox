@@ -11,6 +11,7 @@ function silent() {
   exit_code=${pipestatus[1]}
   if [ $exit_code -ne 0 ]; then
     print -P "%F{red}$(cat /tmp/out.txt)%f"
+    print -P "Error at $(date)"
   fi
   return $exit_code
 }
