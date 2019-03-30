@@ -90,7 +90,7 @@ kops create cluster \
   --name ${CLUSTER_NAME[2]} \
   --network-cidr $cidr \
   --target $target \
-  --out . \
+  --out /tmp/ \
   --yes
 
 if [[ "$WAIT" != "--wait" && "$VAULT" != "--vault" ]]; then
